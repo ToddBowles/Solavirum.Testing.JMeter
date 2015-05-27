@@ -1,0 +1,326 @@
+{
+	"AWSTemplateFormatVersion" : "2010-09-09",
+	"Description" : "This template creates a series of worker machines intended to run performance/load tests via JMeter.",
+	"Parameters" : {
+		"InstanceType" : {
+			"Description" : "Web server EC2 instance type",
+			"Type" : "String",
+			"Default" : "t2.medium",
+			"AllowedValues" : [
+				"t2.small",
+				"t2.medium",
+				"m1.small",
+				"m1.medium",
+				"m1.large",
+				"m1.xlarge",
+				"m2.xlarge",
+				"m2.2xlarge",
+				"m2.4xlarge",
+				"m3.medium",
+				"m3.large",
+				"m3.xlarge",
+				"m3.2xlarge",
+				"c1.medium",
+				"c1.xlarge"
+			],
+			"ConstraintDescription" : "must be a valid EC2 instance type."
+		},
+		"VpcId" : {
+			"Type" : "AWS::EC2::VPC::Id",
+			"Default" : "vpc-a0a6aec9",
+			"Description" : "VpcId of your existing Virtual Private Cloud (VPC)",
+			"ConstraintDescription" : "must be the VPC Id of an existing Virtual Private Cloud."
+		},
+		"PrivateSubnets" : {
+			"Type" : "List<AWS::EC2::Subnet::Id>",
+			"Default" : "subnet-48ed1c20",
+			"Description" : "The Private Subnets for the Web Servers",
+			"ConstraintDescription" : "must be a list of an existing subnets in the selected Virtual Private Cloud."
+		},
+		"OperatorEMail" : {
+			"Description" : "Email address to notify if there are any scaling operations",
+			"Type" : "String",
+			"Default" : "gatewaylivenotifications@onthehouse.com.au",
+			"AllowedPattern" : "([a-zA-Z0-9_\\-\\.]+)@((\\[[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}\\.)|(([a-zA-Z0-9\\-]+\\.)+))([a-zA-Z]{2,4}|[0-9]{1,3})(\\]?)",
+			"ConstraintDescription" : "must be a valid email address."
+		},
+		"KeyName" : {
+			"Description" : "The EC2 Key Pair to allow RDP access to the instances",
+			"Type" : "AWS::EC2::KeyPair::KeyName",
+			"Default" : "ConsoleMasterKeyPair",
+			"ConstraintDescription" : "must be the name of an existing EC2 KeyPair."
+		},
+		"AdminPassword" : {
+			"Description" : "Password for the Administrator user account",
+			"Type" : "String",
+			"NoEcho" : "true"
+		},
+		"DependenciesArchiveS3Url" : {
+			"Description" : "The URL to the dependencies archive required by the various elements in the stack. This archive contains various elements from the source tree at the time the script was executed.",
+			"Type" : "String"
+		},
+        "S3BucketName" : {
+        	"Description" : "The name of the bucket containing the dependencies archive.",
+			"Type" : "String"
+        },
+        "S3AccessKey" : {
+			"Description" : "The Access Key for a user who is able to access the S3 location containing the dependencies archive.",
+			"Type" : "String"
+		},
+        "S3SecretKey" : {
+			"Description" : "The Secret Key for a user who is able to access the S3 location containing the dependencies archive.",
+			"Type" : "String"
+		},
+        "ProxyUrlAndPort" : {
+            "Description": "The fully qualified URL with port for the internet proxy that any component needs to use in order to access the greater internet.",
+            "Type": "String"
+        },
+        "AwsVpnCidr" : {
+            "Description": "The CIDR (i.e. IP address range) that will be able to access the instances spun up as part of this template.",
+            "Type":"String",
+            "Default":"10.250.240.0/21"
+        },
+        "EnvironmentName" : {
+            "Description": "Some unique identifier tying these JMeter workers to an environment or test run.",
+            "Type":"String"
+        },
+        "AmiId": {
+            "Description": "The AMI ID, eg ami-a3a2d599 to use for the base windows server instances.",
+            "Type":"String"
+        },
+        "DesiredNumberOfWorkers": {
+            "Description": "The number of worker instances that will be provisioned.",
+            "Type": "Number",
+            "Default": "1"
+        }
+	},
+	"Resources" : {
+		"NotificationTopic" : {
+			"Type" : "AWS::SNS::Topic",
+			"Properties" : {
+				"Subscription" : [{
+						"Endpoint" : {
+							"Ref" : "OperatorEMail"
+						},
+						"Protocol" : "email"
+					}
+				]
+			}
+		},
+		"JMeterWorkersAutoScalingGroup" : {
+			"Type" : "AWS::AutoScaling::AutoScalingGroup",
+			"Properties" : {
+				"AvailabilityZones" : [ "ap-southeast-2a" ],
+				"VPCZoneIdentifier" : { "Ref" : "PrivateSubnets" },
+				"LaunchConfigurationName" : { "Ref" : "JMeterWorkerConfig" },
+				"DesiredCapacity" : { "Ref" : "DesiredNumberOfWorkers" } ,
+				"MinSize" : "0",
+				"MaxSize" : "20",
+				"Tags" : [
+                    {
+						"Key" : "Name",
+						"Value" : { "Fn::Join" : [ "", [ "JMeter-Worker", "[", { "Ref" : "EnvironmentName" }, "]" ] ] },
+						"PropagateAtLaunch" : "true"
+					}
+				],
+				"NotificationConfiguration" : {
+					"TopicARN" : {
+						"Ref" : "NotificationTopic"
+					},
+					"NotificationTypes" : [
+						"autoscaling:EC2_INSTANCE_LAUNCH",
+						"autoscaling:EC2_INSTANCE_LAUNCH_ERROR",
+						"autoscaling:EC2_INSTANCE_TERMINATE",
+						"autoscaling:EC2_INSTANCE_TERMINATE_ERROR"
+					]
+				}
+			},
+			"UpdatePolicy" : {
+				"AutoScalingRollingUpdate" : {
+					"MinInstancesInService" : "1",
+					"MaxBatchSize" : "1",
+					"PauseTime" : "PT15M",
+					"WaitOnResourceSignals" : "true"
+				}
+			}
+		},
+		"JMeterWorkerConfig" : {
+			"Type" : "AWS::AutoScaling::LaunchConfiguration",
+			"Metadata" : {
+				"Comment" : "Set up instance",
+				"AWS::CloudFormation::Init" : {
+					"configSets" : {
+						"config" : [
+							"setup"
+						]
+					},
+					"setup" : {
+						"files" : {
+							"c:\\cfn\\cfn-hup.conf" : {
+								"content" : {
+									"Fn::Join" : [
+										"",
+										[
+											"[main]\n",
+											"stack=", { "Ref" : "AWS::StackName" },
+											"\n",
+											"region=", { "Ref" : "AWS::Region" },
+											"\n"
+										]
+									]
+								}
+							},
+							"c:\\cfn\\hooks.d\\cfn-auto-reloader.conf" : {
+								"content" : {
+									"Fn::Join" : [
+										"",
+										[
+											"[cfn-auto-reloader-hook]\n",
+											"triggers=post.update\n",
+											"path=Resources.JMeterWorkerConfig.Metadata.AWS::CloudFormation::Init\n",
+											"action=cfn-init.exe -v -c config -s ", { "Ref" : "AWS::StackId" },
+                                            " -r JMeterWorkerConfig",
+								            " --region ", { "Ref" : "AWS::Region" },
+								            "\n",
+                                            "cfn-signal.exe -e %ERRORLEVEL%", 
+                                            " --stack ", { "Ref" : "AWS::StackName" }, 
+                                            " --region ", { "Ref" : "AWS::Region" } , 
+                                            " --resource JMeterWorkersAutoScalingGroup",
+                                            "\n"
+										]
+									]
+								}
+							}
+						},
+                        "sources" : {
+							"c:\\cfn\\dependencies" : { "Ref" : "DependenciesArchiveS3Url" }
+						},
+						"services" : {
+							"windows" : {
+								"cfn-hup" : {
+									"enabled" : "true",
+									"ensureRunning" : "true",
+									"files" : [
+										"c:\\cfn\\cfn-hup.conf",
+										"c:\\cfn\\hooks.d\\cfn-auto-reloader.conf"
+									]
+								}
+							}
+						},
+						"commands" : {
+							"a-set-execution-policy" : {
+								"command" : "powershell.exe -command Set-ExecutionPolicy RemoteSigned -Force",
+								"waitAfterCompletion" : "0"
+							},
+                            "b-reset-local-admin" : {
+								"command" : {
+									"Fn::Join" : [
+										"",
+										[
+											"powershell.exe -executionpolicy remotesigned -command C:\\cfn\\dependencies\\scripts\\environment\\Reset-LocalAdminPassword.ps1 -password '", { "Ref" : "AdminPassword" }, "'"
+										]
+									]
+								},
+								"waitAfterCompletion" : "0"
+							},
+                            "c-disable-firewall" : {
+								"command" : {
+									"Fn::Join" : [
+										"",
+										[
+											"powershell.exe -executionpolicy remotesigned -command netsh advfirewall set allprofiles state off"
+										]
+									]
+								},
+								"waitAfterCompletion" : "0"
+							}
+						}
+					}
+				},
+                "AWS::CloudFormation::Authentication" : {
+                    "S3AccessCreds" : {
+                        "type" : "S3",
+                        "accessKeyId" : { "Ref" : "S3AccessKey" },
+                        "secretKey" : { "Ref": "S3SecretKey" },
+                        "buckets" : [ { "Ref":"S3BucketName" } ]
+                    }
+                }
+			},
+			"Properties" : {
+				"KeyName" : {
+					"Ref" : "KeyName"
+				},
+				"ImageId" : { "Ref" : "AmiId" },
+				"SecurityGroups" : [{ "Ref" : "JMeterWorkerSecurityGroup" }
+				],
+				"InstanceType" : { "Ref" : "InstanceType" },
+				"UserData" : {
+					"Fn::Base64" : {
+						"Fn::Join" : [
+							"",
+							[
+                            	"<script>",
+								"netsh winhttp set proxy ", { "Ref":"ProxyUrlAndPort" },
+								"\r\n",
+								"SET HTTP_PROXY=", { "Ref":"ProxyUrlAndPort" },
+								"\r\n",
+								"SET HTTPS_PROXY=", { "Ref":"ProxyUrlAndPort" },
+								"\r\n",
+								"SETX HTTP_PROXY ", { "Ref":"ProxyUrlAndPort" }, " /M",
+								"\r\n",
+								"SETX HTTPS_PROXY ", { "Ref":"ProxyUrlAndPort" }, " /M",
+								"\r\n",
+								"cfn-init.exe -v -c config -s ", { "Ref" : "AWS::StackId" },
+                                " -r JMeterWorkerConfig",
+								" --region ", { "Ref" : "AWS::Region" },
+								"\r\n",
+                                "SET CFN_INIT_EXIT_CODE=%ERRORLEVEL%", 
+                                "\r\n",
+                                "cfn-signal.exe -e %CFN_INIT_EXIT_CODE% ", { "Fn::Base64" : { "Ref" : "JMeterWorkerConfigWaitHandle" }},
+								"</script>"
+							]
+						]
+					}
+				}
+			}
+		},
+        "JMeterWorkerConfigWaitHandle" : {
+			"Type" : "AWS::CloudFormation::WaitConditionHandle"
+		},
+		"JMeterWorkerConfigWaitCondition" : {
+			"Type" : "AWS::CloudFormation::WaitCondition",
+			"DependsOn" : "JMeterWorkerConfig",
+			"Properties" : {
+				"Handle" : { "Ref" : "JMeterWorkerConfigWaitHandle" },
+				"Timeout" : "3000",
+                "Count" : { "Ref" : "DesiredNumberOfWorkers" } 
+			}
+		},
+		"JMeterWorkerSecurityGroup" : {
+			"Type" : "AWS::EC2::SecurityGroup",
+			"Properties" : {
+				"GroupDescription" : "Enable RDP and Remote Powershell Execution from the office VPN.",
+				"VpcId" : { "Ref" : "VpcId" },
+				"SecurityGroupIngress" : [{
+						"IpProtocol" : "tcp",
+						"FromPort" : "3389",
+						"ToPort" : "3389",
+						"CidrIp" : { "Ref" : "AwsVpnCidr" }
+					},
+                    {
+						"IpProtocol" : "tcp",
+						"FromPort" : "5985",
+						"ToPort" : "5985",
+						"CidrIp" : { "Ref" : "AwsVpnCidr" }
+					}
+				]
+			}
+		}
+	},
+	"Outputs" : {
+		"AutoScalingGroupName" : {
+			"Description" : "The name of the AutoScalingGroup containing the JMeter test instances.",
+			"Value" : { "Ref" : "JMeterWorkersAutoScalingGroup" }
+		}
+	}
+}
