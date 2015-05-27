@@ -1,0 +1,10 @@
+jmeter.log
+results/
+logs/
+tools/packages
+
+# Directories containing working folders for Pester powershell unit tests.
+test-working/
+
+# Working directories for scripts to place temporary files.
+script-working/
