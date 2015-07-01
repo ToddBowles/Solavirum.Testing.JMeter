@@ -1,19 +1,19 @@
 param
 (
-    [int]$totalNumberOfUsers,
-    [int]$startingCustomerNumber,
+    [Nullable[int]]$totalNumberOfUsers,
+    [Nullable[int]]$startingCustomerNumber,
     [int]$allocatedMemory=2048
 )
 
 $currentDirectoryPath = Split-Path $script:MyInvocation.MyCommand.Path
 write-verbose "Script is located at [$currentDirectoryPath]."
 
-. "$currentDirectoryPath\_Find-RepositoryRoot.ps1"
+. "$currentDirectoryPath\_Find-RootDirectory.ps1"
 
-$repositoryRoot = Find-RepositoryRoot $currentDirectoryPath
-$repositoryRootDirectoryPath = $repositoryRoot.FullName
+$rootDirectory = Find-RootDirectory $currentDirectoryPath
+$rootDirectoryDirectoryPath = $rootDirectory.FullName
 
-. "$repositoryRootDirectoryPath\scripts\jmeter\Functions-Jmeter.ps1"
+. "$rootDirectoryDirectoryPath\scripts\Functions-Jmeter.ps1"
 
 $additionalArguments = @()
 $additionalArguments += "-n"

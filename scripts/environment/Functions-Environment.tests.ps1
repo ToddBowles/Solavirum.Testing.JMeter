@@ -2,9 +2,10 @@ $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $sut = (Split-Path -Leaf $MyInvocation.MyCommand.Path) -ireplace "tests.", ""
 . "$here\$sut"
 
-. "$currentDirectoryPath\_Find-RepositoryRoot.ps1"
-$repositoryRoot = Find-RepositoryRoot $here
+. "$currentDirectoryPath\_Find-RootDirectory.ps1"
+$rootDirectory = Find-RootDirectory $here
 
+. "$($rootDirectory.FullName)\scripts\common\Functions-Credentials.ps1"
 
 function Create-UniqueEnvironmentName
 {
@@ -28,14 +29,25 @@ function Get-AwsCredentials
     return New-Object PSObject -Property $awsCreds
 }
 
+function Get-OctopusCredentials
+{
+    $keyLookup = "OCTOPUS_API_KEY"
+
+    $creds = @{
+        ApiKey = (Get-CredentialByKey $keyLookup);
+    }
+    return New-Object PSObject -Property $creds
+}
+
 Describe "New-Environment" {
     Context "When executed with appropriate parameters" {
         It "Returns appropriate outputs, including stack identifiers and name of JMeter Worker auto scaling group for exposed services" {
             try
             {
                 $creds = Get-AWSCredentials
+                $octoCreds = Get-OctopusCredentials
                 $environmentName = Create-UniqueEnvironmentName
-                $environmentCreationResult = New-Environment -AwsKey $creds.AwsKey -AwsSecret $creds.AwsSecret -AwsRegion $creds.AwsRegion -EnvironmentName $environmentName -Wait -DisableCleanupOnFailure
+                $environmentCreationResult = New-Environment -AwsKey $creds.AwsKey -AwsSecret $creds.AwsSecret -AwsRegion $creds.AwsRegion -OctopusApiKey $octoCreds.ApiKey -EnvironmentName $environmentName -Wait -DisableCleanupOnFailure
 
                 Write-Verbose (ConvertTo-Json $environmentCreationResult)
 
@@ -43,10 +55,7 @@ Describe "New-Environment" {
             }
             finally
             {
-                if ($environmentCreationResult -ne $null)
-                {
-                    Delete-Environment -AwsKey $creds.AwsKey -AwsSecret $creds.AwsSecret -AwsRegion $creds.AwsRegion -EnvironmentName $environmentName -Wait
-                }
+                Delete-Environment -AwsKey $creds.AwsKey -AwsSecret $creds.AwsSecret -AwsRegion $creds.AwsRegion -OctopusApiKey $octoCreds.ApiKey -EnvironmentName $environmentName -Wait
             }
         }
     }

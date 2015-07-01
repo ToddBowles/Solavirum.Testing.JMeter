@@ -10,15 +10,17 @@ param
     [Parameter(Mandatory=$true)]
     [ValidateNotNullOrEmpty()]
     [string]$awsSecret,
+    [Parameter(Mandatory=$true)]
+    [ValidateNotNullOrEmpty()]
+    [string]$octopusApiKey,
     [string]$awsRegion="ap-southeast-2"
 )
 
 $currentDirectoryPath = Split-Path $script:MyInvocation.MyCommand.Path
-write-verbose "Script is located at [$currentDirectoryPath]."
 
-. "$currentDirectoryPath\_Find-RepositoryRoot.ps1"
+. "$currentDirectoryPath\_Find-RootDirectory.ps1"
 . "$currentDirectoryPath\Functions-Environment.ps1"
 
-$repositoryRoot = Find-RepositoryRoot $currentDirectoryPath
+$rootDirectory = Find-RootDirectory $currentDirectoryPath
 
-Delete-Environment $environmentName $awsKey $awsSecret $awsRegion -Wait
+Delete-Environment $environmentName $awsKey $awsSecret $awsRegion -Wait -octopusApiKey $octopusApiKey

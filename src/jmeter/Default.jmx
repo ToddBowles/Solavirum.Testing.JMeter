@@ -40,7 +40,7 @@
           </elementProp>
           <elementProp name="totalNumberOfUsers" elementType="Argument">
             <stringProp name="Argument.name">totalNumberOfUsers</stringProp>
-            <stringProp name="Argument.value">${__P(totalNumberOfUsers, 50)}</stringProp>
+            <stringProp name="Argument.value">${__P(totalNumberOfUsers, 1)}</stringProp>
             <stringProp name="Argument.metadata">=</stringProp>
           </elementProp>
           <elementProp name="startingCustomerNumber" elementType="Argument">

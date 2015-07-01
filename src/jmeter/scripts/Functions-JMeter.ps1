@@ -1,16 +1,16 @@
 function Ensure-JavaRuntimeEnvironmentIsAvailable
 {
-    if ($repositoryRoot -eq $null) { throw "repositoryRoot script scoped variable not set. Thats bad, its used to find dependencies." }
-    $repositoryRootDirectoryPath = $repositoryRoot.FullName
+    if ($rootDirectory -eq $null) { throw "rootDirectory script scoped variable not set. Thats bad, its used to find dependencies." }
+    $rootDirectoryDirectoryPath = $rootDirectory.FullName
 
-    $commonScriptsDirectoryPath = "$repositoryRootDirectoryPath\scripts\common"
+    $commonScriptsDirectoryPath = "$rootDirectoryDirectoryPath\scripts\common"
 
     . "$commonScriptsDirectoryPath\Functions-Enumerables.ps1"
     . "$commonScriptsDirectoryPath\Functions-Compression.ps1"
 
     $jreId = "jre-1.8.0_40"
 
-    $toolsDirectoryPath = "$repositoryRootDirectoryPath\tools"
+    $toolsDirectoryPath = "$rootDirectoryDirectoryPath\tools"
     $packagesDirectoryPath = "$toolsDirectoryPath\packages"
     $jreDirectoryPath = "$packagesDirectoryPath\$jreId"
     if (Test-Path $jreDirectoryPath)
@@ -31,17 +31,17 @@ function Ensure-JavaRuntimeEnvironmentIsAvailable
 
 function Ensure-JmeterIsAvailable
 {
-    if ($repositoryRoot -eq $null) { throw "repositoryRoot script scoped variable not set. Thats bad, its used to find dependencies." }
-    $repositoryRootDirectoryPath = $repositoryRoot.FullName
+    if ($rootDirectory -eq $null) { throw "rootDirectory script scoped variable not set. Thats bad, its used to find dependencies." }
+    $rootDirectoryDirectoryPath = $rootDirectory.FullName
 
-    $commonScriptsDirectoryPath = "$repositoryRootDirectoryPath\scripts\common"
+    $commonScriptsDirectoryPath = "$rootDirectoryDirectoryPath\scripts\common"
 
     . "$commonScriptsDirectoryPath\Functions-Enumerables.ps1"
     . "$commonScriptsDirectoryPath\Functions-Compression.ps1"
 
     $jmeterId = "apache-jmeter-2.13"
 
-    $toolsDirectoryPath = "$repositoryRootDirectoryPath\tools"
+    $toolsDirectoryPath = "$rootDirectoryDirectoryPath\tools"
     $packagesDirectoryPath = "$toolsDirectoryPath\packages"
     $jmeterDirectoryPath = "$packagesDirectoryPath\$jmeterId"
     if (Test-Path $jmeterDirectoryPath)
@@ -81,24 +81,19 @@ function Execute-JMeter
 
     $arguments = @()
     $arguments += "-t"
-    $arguments += "$repositoryRootDirectoryPath\src\jmeter\LiveAgentService.jmx"
+    $arguments += "$rootDirectoryDirectoryPath\Default.jmx"
     $arguments += "-J"
-    $arguments += "search_paths=$repositoryRootDirectoryPath\src\jmeter\lib\"
+    $arguments += "search_paths=$rootDirectoryDirectoryPath\lib\"
     $arguments += "-q"
-    $arguments += "$repositoryRootDirectoryPath\src\jmeter\user.properties"
+    $arguments += "$rootDirectoryDirectoryPath\user.properties"
     $arguments += "--jmeterlogfile"
-    $arguments += "$repositoryRootDirectoryPath\results\$a.log"
+    $arguments += "$rootDirectoryDirectoryPath\results\$a.log"
     $arguments += "-l"
-    $arguments += "$repositoryRootDirectoryPath\results\$a.csv"
+    $arguments += "$rootDirectoryDirectoryPath\results\$a.csv"
     
-    if ($totalNumberOfUsers.HasValue)
+    if ($totalNumberOfUsers -ne $null)
     {
         $arguments += "-JtotalNumberOfUsers=$($totalNumberOfUsers.ToString())"
-    }
-
-    if ($startingCustomerNumber.HasValue)
-    {
-        $arguments += "-JstartingCustomerNumber=$($startingCustomerNumber.ToString())"
     }
 
     if ($env:HTTP_PROXY -ne $null)

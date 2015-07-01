@@ -1,10 +1,23 @@
-jmeter.log
-results/
-logs/
-tools/packages
+**/jmeter.log
+**/results/
+
+#OS junk files
+[Tt]humbs.db
+*.DS_Store
+
+#NuGet
+**/packages/
+*.nupkg
+
+#Build script output
+[Bb]uild-[Oo]utput
 
 # Directories containing working folders for Pester powershell unit tests.
 test-working/
 
 # Working directories for scripts to place temporary files.
 script-working/
+
+# common deployment scripts
+scripts/common/
+src/scripts/common/
